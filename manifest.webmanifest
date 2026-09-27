@@ -1,0 +1,16 @@
+{
+  "name": "월급 배분 노트",
+  "short_name": "월급노트",
+  "description": "실수령액을 입력하면 이번 달 생활비와 계좌별로 모인 돈을 보여주는 가계부",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF9F5",
+  "theme_color": "#FAF9F5",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

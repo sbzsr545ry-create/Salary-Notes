@@ -1,18 +1,4 @@
-<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#262624" media="(prefers-color-scheme: dark)">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="월급노트">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>월급 배분 노트</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -164,9 +150,6 @@ button.row:hover{background:var(--sunk)}
 .sync{font-size:12px;color:var(--ink-3);text-align:center;margin-top:24px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
-</head>
-<body>
-
 
 <div class="wrap">
   <section id="home"></section>
@@ -181,21 +164,38 @@ button.row:hover{background:var(--sunk)}
   // ---------- constants ----------
   const ACCTS = [
     {k:"cheongyak", n:"청약", mono:"청", desc:"주택청약종합저축"},
-    {k:"isa", n:"ISA", mono:"IS", desc:"서민형 ISA", inv:true},
+    {k:"isa", n:"ISA", mono:"IS", desc:"중개형 ISA", inv:true},
     {k:"invest", n:"개인투자", mono:"투", desc:"일반 위탁계좌", inv:true},
-    {k:"pension", n:"개인연금", mono:"연", desc:"급여에서 자동 공제", auto:true},
-    {k:"iphone", n:"아이폰", mono:"폰", desc:"기기 적립"},
-    {k:"travel", n:"여행", mono:"여", desc:"여행 적립"}
+    {k:"pension", n:"개인연금(삼성)", mono:"삼", desc:"급여에서 자동 공제", auto:true},
+    {k:"pension2", n:"개인연금(추가)", mono:"추", desc:"월급 받은 뒤 직접 적립"}
   ];
-  const ALLOC_KEYS = ["cheongyak","isa","invest","iphone","travel","rent"];
-  const LABEL = {cheongyak:"청약",isa:"ISA",invest:"개인투자",iphone:"아이폰",travel:"여행",rent:"월세+관리비",pension:"개인연금"};
-  const COLORS = {cheongyak:"#8C6BB1",isa:"#D97757",invest:"#E0A458",iphone:"#6B9E8C",travel:"#5B8DB8",rent:"#9A948A",living:"var(--line)"};
+  const ALLOC_KEYS = ["cheongyak","isa","invest","pension2","rent"];
+  const LEGACY_KEYS = ["iphone","travel"]; // 예전 칸: 불러올 때 개인투자로 합침
+  const ALL_KEYS = ALLOC_KEYS;
+  const LABEL = {cheongyak:"청약",isa:"ISA",invest:"개인투자",pension2:"개인연금(추가)",iphone:"아이폰",travel:"여행",rent:"월세+관리비",pension:"개인연금(삼성)"};
+  const COLORS = {cheongyak:"#8C6BB1",isa:"#D97757",invest:"#E0A458",pension2:"#5B8DB8",iphone:"#6B9E8C",travel:"#7FA3C4",rent:"#9A948A",living:"var(--line)"};
   const ISA_LIMIT = 20000000;
-  const DEFAULT_PLAN = {alloc:{cheongyak:100000,isa:1600000,invest:400000,iphone:80000,travel:120000,rent:660000}, pension:128760, fixed:[]};
+  const DEFAULT_PLAN = {alloc:{cheongyak:100000,isa:1600000,invest:378000,pension2:222000,rent:660000}, pension:139000, pensionCo:139000, fixed:[]};
+  // 예전 설정(아이폰·여행 칸, 추가연금 없음)을 새 배분으로 바꿔 줌
+  function migratePlan(p){
+    if(!p || !p.alloc || "pension2" in p.alloc) return p;
+    const alloc = {...p.alloc};
+    LEGACY_KEYS.forEach(k=>delete alloc[k]);
+    return {...p, alloc:{...alloc, invest:DEFAULT_PLAN.alloc.invest, pension2:DEFAULT_PLAN.alloc.pension2}, pension:DEFAULT_PLAN.pension};
+  }
+  // 예전 달의 아이폰·여행 적립금을 개인투자로 옮김
+  function migrateMonth(m){
+    if(!m.alloc || !LEGACY_KEYS.some(k=>k in m.alloc)) return m;
+    const alloc = {...m.alloc};
+    LEGACY_KEYS.forEach(k=>{ alloc.invest=(alloc.invest||0)+(alloc[k]||0); delete alloc[k]; });
+    return {...m, alloc};
+  }
+  const penOwn = m => m.pension ?? plan.pension;
+  const penCo = m => m.pensionCo ?? (plan.pensionCo ?? DEFAULT_PLAN.pensionCo);
 
   // ---------- state ----------
   let plan = DEFAULT_PLAN, months = [], adjust = [], evals = [];
-  const cols = null;
+  let cols = null;
   let view = {name:"home"};
   const LS = "salary.notes.v1";
   const $ = id => document.getElementById(id);
@@ -221,7 +221,7 @@ button.row:hover{background:var(--sunk)}
   }
 
   // ---------- derived ----------
-  const allocSum = m => ALLOC_KEYS.reduce((s,k)=>s+(m.alloc?.[k]||0),0);
+  const allocSum = m => ALL_KEYS.reduce((s,k)=>s+(m.alloc?.[k]||0),0);
   const fixedTotal = () => (plan.fixed||[]).reduce((s,f)=>s+(f.amount||0),0);
   const living = m => (m.net||0) - allocSum(m);
   const sortedMonths = () => [...months].sort((a,b)=>b.id.localeCompare(a.id));
@@ -229,7 +229,7 @@ button.row:hover{background:var(--sunk)}
   function entries(k){
     const list = [];
     months.forEach(m => {
-      const amt = k==="pension" ? (m.pension ?? plan.pension) : (m.alloc?.[k]||0);
+      const amt = k==="pension" ? penOwn(m)+penCo(m) : (m.alloc?.[k]||0);
       if(amt) list.push({date:`${m.id}-21`, ym:m.id, label:`${ymLabel(m.id)} 급여 적립`, amount:amt, kind:"dep"});
     });
     adjust.filter(a=>a.acct===k).forEach(a => list.push({date:a.date, ym:a.date.slice(0,7), label:a.memo || (a.amount<0?"출금":"추가 입금"), amount:a.amount, kind:"adj", id:a.id}));
@@ -248,7 +248,7 @@ button.row:hover{background:var(--sunk)}
   const pillFor = r => { const c = r>0.005?"up":r<-0.005?"down":"flat"; return `<span class="pill ${c}">${r>0?"+":""}${r.toFixed(2)}%</span>`; };
 
   // ---------- storage ----------
-  function lsLoad(){ try{ const d=JSON.parse(localStorage.getItem(LS)||"null"); if(d){ plan=d.plan?{...DEFAULT_PLAN,...d.plan,alloc:{...DEFAULT_PLAN.alloc,...(d.plan.alloc||{})},fixed:[...(d.plan.fixed||[])]}:plan; months=d.months||[]; adjust=d.adjust||[]; evals=d.evals||[]; } }catch(e){} }
+  function lsLoad(){ try{ const d=JSON.parse(localStorage.getItem(LS)||"null"); if(d){ plan=migratePlan(d.plan)||plan; months=(d.months||[]).map(migrateMonth); adjust=d.adjust||[]; evals=d.evals||[]; } }catch(e){} }
   function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify({plan,months,adjust,evals})); }catch(e){} }
   function strip(o){ const {id,...rest}=o; return rest; }
   async function put(colName, arrName, doc){
@@ -286,7 +286,7 @@ button.row:hover{background:var(--sunk)}
     let hero = "";
     if(latest){
       const lv = living(latest), free = lv - fixedTotal();
-      const segs = ALLOC_KEYS.map(k=>({k, v:latest.alloc?.[k]||0})).filter(s=>s.v>0);
+      const segs = ALL_KEYS.map(k=>({k, v:latest.alloc?.[k]||0})).filter(s=>s.v>0);
       const base = Math.max(latest.net, allocSum(latest)) || 1;
       hero = `<button class="hero" data-month="${latest.id}">
         <div class="eyebrow">${ymLabel(latest.id)} · 실수령 <span class="num">${won(latest.net)}</span>원</div>
@@ -301,7 +301,7 @@ button.row:hover{background:var(--sunk)}
     const grand = ACCTS.reduce((s,a)=>s+total(a.k),0);
     const acctRows = ACCTS.map(a=>{
       const t = total(a.k);
-      let sub = a.auto ? `매달 ${won(plan.pension)}원 자동 공제` : `매달 ${won(plan.alloc[a.k])}원`;
+      let sub = a.auto ? `매달 ${won(plan.pension+(plan.pensionCo??0))}원 · 본인+회사` : `매달 ${won(plan.alloc[a.k]||0)}원`;
       let extra = "";
       if(a.inv){ const ev = evalsOf(a.k)[0]; if(ev){ sub = `${ymLabel(ev.ym)} 평가 ${won(ev.value)}원`; extra = `<div>${pillFor(ev.rate)}</div>`; } }
       return `<button class="row" data-acct="${a.k}">
@@ -318,7 +318,7 @@ button.row:hover{background:var(--sunk)}
     }).join("") : `<div class="empty">월급을 입력하면 여기에 쌓여요.</div>`;
 
     $("home").innerHTML = `
-      <div class="top"><h1>월급 배분 노트</h1><button class="icon-btn" data-act="plan" aria-label="설정">${GEAR}</button></div>
+      <div class="top"><h1>월급 배분 노트</h1><button class="icon-btn" data-act="plan" aria-label="기본 배분 설정">${GEAR}</button></div>
       ${hero}
       <button class="cta" data-act="new-month">${PLUS}이번 달 실수령액 입력</button>
       <div class="sec"><p class="label">모인 돈</p><span class="total num">${won(grand)}원</span></div>
@@ -349,7 +349,7 @@ button.row:hover{background:var(--sunk)}
         card += `<div class="limit">${y}년 납입 <b class="num">${won(paid)}</b> / 연 한도 2,000만 원<div class="bar"><span style="width:${Math.min(100,paid/ISA_LIMIT*100)}%"></span></div></div>`;
       }
     }
-    if(a.auto) card += `<p class="note" style="margin:10px 0 0">연봉의 3%가 급여에서 빠진 뒤 입금돼요. 월급을 기록할 때마다 자동으로 쌓여요.</p>`;
+    if(a.auto) card += `<div class="stats"><div class="stat"><div class="k">본인 공제 (매달)</div><div class="v2">${won(plan.pension)}</div></div><div class="stat"><div class="k">회사 부담 (매달)</div><div class="v2">${won(plan.pensionCo??0)}</div></div></div><p class="note" style="margin:10px 0 0">본인분(연봉의 3%)은 급여에서 빠지고, 회사 부담금이 함께 들어와요. 월급을 기록할 때마다 자동으로 쌓여요.</p>`;
     card += `</div>`;
 
     const btns = `<div class="btns">
@@ -384,7 +384,7 @@ button.row:hover{background:var(--sunk)}
   function renderMonth(id){
     const m = months.find(x=>x.id===id); if(!m) return goHome();
     const lv = living(m), fx = plan.fixed||[];
-    const rows = ALLOC_KEYS.filter(k=>m.alloc?.[k]).map(k=>{
+    const rows = ALL_KEYS.filter(k=>m.alloc?.[k]).map(k=>{
       const a = acct(k);
       return `<${a?`button data-acct="${k}"`:"div"} class="row">
         <span class="mono ${a?"":"grey"}">${a?a.mono:"집"}</span>
@@ -404,7 +404,7 @@ button.row:hover{background:var(--sunk)}
         ${fx.map(f=>`<div class="sub-row"><span>${esc(f.name)}</span><span class="num">−${won(f.amount)}</span></div>`).join("")}
         ${fx.length?`<div class="sub-row" style="color:var(--ink);font-weight:600"><span>자유롭게 쓸 돈</span><span class="num">${won(lv-fixedTotal())}</span></div>`:""}
       </div>
-      <p class="note">개인연금 ${won(m.pension ?? plan.pension)}원은 급여에서 먼저 빠져서 위 실수령액에 포함되지 않아요. 구내식당 이용액이 빠진 금액을 입력해도 생활비에서 이미 먹은 밥값이 정산된 셈이라 따로 챙길 필요 없어요.</p>`;
+      <p class="note">개인연금(삼성)에는 본인 공제 ${won(penOwn(m))}원과 회사 부담 ${won(penCo(m))}원이 들어가요. 본인분은 급여에서 먼저 빠져서 위 실수령액에 포함되지 않아요. 구내식당 이용액이 빠진 금액을 입력해도 생활비에서 이미 먹은 밥값이 정산된 셈이라 따로 챙길 필요 없어요.</p>`;
   }
 
   function render(){
@@ -433,34 +433,35 @@ button.row:hover{background:var(--sunk)}
   function monthSheet(existing){
     const ym = existing ? existing.id : nextYM();
     const src = existing ? existing.alloc : plan.alloc;
+    const KEYS = ALLOC_KEYS;
     openSheet(`
       <h2>${existing?`${ymLabel(ym)} 수정`:"실수령액 입력"}</h2>
       <div class="field"><label for="mYm">급여 월</label><select id="mYm" class="inp" ${existing?"disabled":""}>${ymOptions(ym)}</select></div>
       <div class="field"><label for="mNet">통장에 찍힌 금액</label><input id="mNet" class="inp r" inputmode="numeric" data-money value="${existing?won(existing.net):""}" placeholder="3,446,000" autocomplete="off"></div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 6px"><span class="label">이번 달 배분</span><button class="linkish" id="mReset" type="button">기본값 불러오기</button></div>
-      <div class="alloc">${ALLOC_KEYS.map(k=>`<div class="alloc-row"><span class="nm">${LABEL[k]}</span><input class="inp r" inputmode="numeric" data-money data-k="${k}" id="mA_${k}" value="${won(src?.[k]||0)}"></div>`).join("")}</div>
+      <div class="alloc">${KEYS.map(k=>`<div class="alloc-row"><span class="nm">${LABEL[k]}</span><input class="inp r" inputmode="numeric" data-money data-k="${k}" id="mA_${k}" value="${won(src?.[k]||0)}"></div>`).join("")}</div>
       <div class="summary" id="mSum"><span class="k">생활비</span><span class="v" id="mSumV">—</span></div>
-      <p class="hint">개인연금 ${won(plan.pension)}원은 이미 빠진 금액이라 자동으로 적립돼요. 이번 달만 저축을 줄이려면 위 칸만 고치면 돼요.</p>
+      <p class="hint">개인연금(삼성) 본인 ${won(plan.pension)}원은 이미 빠진 금액이고, 회사 부담 ${won(plan.pensionCo??0)}원과 함께 자동으로 적립돼요. 이번 달만 저축을 줄이려면 위 칸만 고치면 돼요.</p>
       <p class="err" id="mErr" hidden></p>
       <div class="actions">${existing?`<button class="btn danger" id="mDel">삭제</button>`:""}<button class="btn" id="mCancel">취소</button><button class="btn primary" id="mSave">저장</button></div>`, sh=>{
       moneyInputs(sh);
-      const read = () => { const alloc={}; ALLOC_KEYS.forEach(k=>alloc[k]=parse(sh.querySelector(`#mA_${k}`).value)); return alloc; };
+      const read = () => { const alloc={}; KEYS.forEach(k=>alloc[k]=parse(sh.querySelector(`#mA_${k}`).value)); return alloc; };
       const upd = () => {
         const net=parse(sh.querySelector("#mNet").value), alloc=read();
-        const lv = net - ALLOC_KEYS.reduce((s,k)=>s+alloc[k],0);
+        const lv = net - KEYS.reduce((s,k)=>s+alloc[k],0);
         const box=sh.querySelector("#mSum");
         box.classList.toggle("bad", net>0 && lv<0);
         sh.querySelector("#mSumV").textContent = net ? `${won(lv)}원 · 자유 ${won(lv-fixedTotal())}` : "금액을 입력하세요";
       };
       sh.querySelectorAll("input").forEach(i=>i.addEventListener("input",upd)); upd();
-      sh.querySelector("#mReset").onclick=()=>{ ALLOC_KEYS.forEach(k=>sh.querySelector(`#mA_${k}`).value=won(plan.alloc[k]||0)); upd(); };
+      sh.querySelector("#mReset").onclick=()=>{ KEYS.forEach(k=>sh.querySelector(`#mA_${k}`).value=won(plan.alloc[k]||0)); upd(); };
       if(!existing) setTimeout(()=>sh.querySelector("#mNet").focus(),60);
       sh.querySelector("#mCancel").onclick=closeSheet;
       sh.querySelector("#mSave").onclick=()=>{
         const id = sh.querySelector("#mYm").value, net=parse(sh.querySelector("#mNet").value), err=sh.querySelector("#mErr");
         if(!net){ err.textContent="통장에 찍힌 금액을 입력해 주세요."; err.hidden=false; return; }
         if(!existing && months.some(m=>m.id===id)){ err.textContent=`${ymLabel(id)} 기록이 이미 있어요. 월별 기록에서 수정해 주세요.`; err.hidden=false; return; }
-        const doc = {id, net, alloc:read(), pension: existing ? (existing.pension ?? plan.pension) : plan.pension, updatedAt:Date.now()};
+        const doc = {id, net, alloc:read(), pension: existing ? penOwn(existing) : plan.pension, pensionCo: existing ? penCo(existing) : (plan.pensionCo??0), updatedAt:Date.now()};
         put("months","months",doc); closeSheet(); toast("저장했어요");
         if(!existing) go("month", id);
       };
@@ -500,7 +501,7 @@ button.row:hover{background:var(--sunk)}
       <div class="seg"><button type="button" id="aOut">출금·사용</button><button type="button" id="aIn">추가 입금</button></div>
       <div class="field"><label for="aAmt">금액</label><input id="aAmt" class="inp r" inputmode="numeric" data-money value="${existing?won(Math.abs(existing.amount)):""}" placeholder="0" autocomplete="off"></div>
       <div class="field"><label for="aDate">날짜</label><input id="aDate" class="inp" type="date" value="${existing?existing.date:today()}"></div>
-      <div class="field"><label for="aMemo">메모</label><input id="aMemo" class="inp" value="${esc(existing?.memo||"")}" placeholder="${k==="travel"?"오사카 여행 항공권":k==="iphone"?"아이폰 구입":"보너스 추가 납입"}" autocomplete="off"></div>
+      <div class="field"><label for="aMemo">메모</label><input id="aMemo" class="inp" value="${esc(existing?.memo||"")}" placeholder="${k==="pension"?"회사 부담금 입금":"보너스 추가 납입"}" autocomplete="off"></div>
       <p class="err" id="aErr" hidden></p>
       <div class="actions">${existing?`<button class="btn danger" id="aDel">삭제</button>`:""}<button class="btn" id="aCancel">취소</button><button class="btn primary" id="aSave">저장</button></div>`, sh=>{
       moneyInputs(sh);
@@ -521,16 +522,13 @@ button.row:hover{background:var(--sunk)}
   function planSheet(){
     let fixed = (plan.fixed||[]).map(f=>({...f}));
     openSheet(`
-      <h2>설정</h2>
+      <h2>기본 배분 설정</h2>
       <p class="hint" style="margin-top:-8px">새 달을 입력할 때 이 금액이 미리 채워져요. 이미 저장한 달은 바뀌지 않아요.</p>
       <div class="alloc">${ALLOC_KEYS.map(k=>`<div class="alloc-row"><span class="nm">${LABEL[k]}</span><input class="inp r" inputmode="numeric" data-money id="pA_${k}" value="${won(plan.alloc[k]||0)}"></div>`).join("")}
-        <div class="alloc-row"><span class="nm">개인연금<small>급여에서 자동 공제</small></span><input class="inp r" inputmode="numeric" data-money id="pPen" value="${won(plan.pension)}"></div></div>
+        <div class="alloc-row"><span class="nm">개인연금(삼성) 본인<small>급여에서 자동 공제</small></span><input class="inp r" inputmode="numeric" data-money id="pPen" value="${won(plan.pension)}"></div>
+        <div class="alloc-row"><span class="nm">개인연금(삼성) 회사<small>회사 부담금</small></span><input class="inp r" inputmode="numeric" data-money id="pPenCo" value="${won(plan.pensionCo??0)}"></div></div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 6px"><span class="label">생활비 안의 고정지출</span><button class="linkish" id="pAdd" type="button">+ 항목 추가</button></div>
       <div class="alloc" id="pFx"></div>
-      <div style="margin:0 2px 6px"><span class="label">백업·복원</span></div>
-      <div class="btns" style="margin:0 0 8px"><button class="ghost" id="pExp" type="button">백업 파일 저장</button><label class="ghost" for="pImp" style="cursor:pointer">백업 불러오기</label></div>
-      <input type="file" id="pImp" accept="application/json,.json" hidden>
-      <p class="hint" style="margin:0 0 14px">기록은 이 브라우저에만 저장돼요. 한 달에 한 번 백업해 두면 폰을 바꾸거나 캐시를 지워도 되살릴 수 있어요. 다른 기기로 옮길 때도 이 파일을 쓰면 돼요.</p>
       <div class="actions"><button class="btn" id="pCancel">취소</button><button class="btn primary" id="pSave">저장</button></div>`, sh=>{
       const box=sh.querySelector("#pFx");
       const sync=()=>{ box.querySelectorAll(".alloc-row").forEach((r,i)=>{ fixed[i].name=r.querySelector("[data-n]").value; fixed[i].amount=parse(r.querySelector("[data-a]").value); }); };
@@ -538,13 +536,11 @@ button.row:hover{background:var(--sunk)}
         moneyInputs(box); box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ sync(); fixed.splice(Number(b.dataset.rm),1); draw(); }); };
       draw(); moneyInputs(sh.querySelector(".alloc"));
       sh.querySelector("#pAdd").onclick=()=>{ sync(); fixed.push({name:"",amount:0}); draw(); box.querySelector(`#pFn_${fixed.length-1}`).focus(); };
-      sh.querySelector("#pExp").onclick=exportData;
-      sh.querySelector("#pImp").onchange=e=>{ const f=e.target.files[0]; if(f) importData(f); };
       sh.querySelector("#pCancel").onclick=closeSheet;
       sh.querySelector("#pSave").onclick=()=>{
         sync();
         const alloc={}; ALLOC_KEYS.forEach(k=>alloc[k]=parse(sh.querySelector(`#pA_${k}`).value));
-        savePlan({alloc, pension:parse(sh.querySelector("#pPen").value), fixed: fixed.filter(f=>f.name.trim()||f.amount).map(f=>({name:f.name.trim()||"기타",amount:f.amount}))});
+        savePlan({alloc, pension:parse(sh.querySelector("#pPen").value), pensionCo:parse(sh.querySelector("#pPenCo").value), fixed: fixed.filter(f=>f.name.trim()||f.amount).map(f=>({name:f.name.trim()||"기타",amount:f.amount}))});
         closeSheet(); toast("기본값을 저장했어요");
       };
     });
@@ -571,38 +567,22 @@ button.row:hover{background:var(--sunk)}
     else if(act==="adj") adjSheet(view.id);
   });
 
-  // ---------- backup ----------
-  function exportData(){
-    const blob = new Blob([JSON.stringify({app:"salary-notes",version:1,exportedAt:new Date().toISOString(),plan,months,adjust,evals},null,2)],{type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `월급배분노트_백업_${today()}.json`;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-    try{ localStorage.setItem(LS+".lastBackup", today()); }catch(e){}
-    toast("백업 파일을 저장했어요"); renderSync();
-  }
-  function importData(file){
-    const r = new FileReader();
-    r.onload = () => {
-      try{
-        const d = JSON.parse(r.result);
-        if(!d || !Array.isArray(d.months)) throw 0;
-        plan = {...DEFAULT_PLAN, ...(d.plan||{}), alloc:{...DEFAULT_PLAN.alloc, ...((d.plan||{}).alloc||{})}, fixed:[...((d.plan||{}).fixed||[])]};
-        months = d.months; adjust = d.adjust||[]; evals = d.evals||[];
-        lsSave(); closeSheet(); goHome(); toast("백업을 불러왔어요");
-      }catch(e){ toast("이 파일은 월급 배분 노트 백업이 아니에요"); }
-    };
-    r.readAsText(file);
-  }
-  function renderSync(){
-    let last=null; try{ last=localStorage.getItem(LS+".lastBackup"); }catch(e){}
-    $("sync").innerHTML = `이 브라우저에만 저장돼요 · ${last?`마지막 백업 ${last.slice(2).replace(/-/g,".")}`:"아직 백업 안 함"} · <button class="linkish" data-act="plan">백업·복원</button>`;
-  }
-
   // ---------- boot ----------
-  lsLoad(); render(); renderSync();
-  if("serviceWorker" in navigator && location.protocol==="https:"){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+  lsLoad(); render();
+  $("sync").textContent="불러오는 중…";
+  (async()=>{
+    let db=null;
+    try{ db = window.claude && window.claude.use ? await window.claude.use("db") : null; }catch(e){ db=null; }
+    if(!db){ $("sync").textContent="이 기기에만 저장돼요"; return; }
+    cols = {months:db.collection("months"), adjust:db.collection("adjust"), evals:db.collection("evals"), config:db.collection("config")};
+    const onErr = ()=>{ $("sync").textContent="동기화가 끊겼어요. 새로고침해 주세요."; };
+    const ok = ()=>{ $("sync").textContent="모든 기기에서 동기화돼요"; };
+    cols.months.onSnapshot(s=>{ months=s.docs.map(d=>migrateMonth({id:d.id,...d.data()})); ok(); render(); }, onErr);
+    cols.adjust.onSnapshot(s=>{ adjust=s.docs.map(d=>({id:d.id,...d.data()})); render(); }, onErr);
+    cols.evals.onSnapshot(s=>{ evals=s.docs.map(d=>({id:d.id,...d.data()})); render(); }, onErr);
+    cols.config.onSnapshot(s=>{ const p=s.docs.find(d=>d.id==="plan"); if(p){ const d=p.data(); const m2=migratePlan(d); plan={...DEFAULT_PLAN,...m2, alloc:{...(m2.alloc||DEFAULT_PLAN.alloc)}, fixed:[...(m2.fixed||[])]}; } render(); }, onErr);
+  })();
 })();
 </script>
 
-</body>
-</html>
+</body></html>
